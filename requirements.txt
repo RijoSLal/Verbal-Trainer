@@ -3,3 +3,4 @@ groq==0.20.0
 gTTS==2.5.4
 pydub==0.25.1
 python-dotenv==1.1.0
+SpeechRecognition==3.14.2
