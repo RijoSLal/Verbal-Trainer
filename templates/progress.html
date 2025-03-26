@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Progress Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Verbal Trainer</a>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h1 class="text-center">Your Progress</h1>
+        <div class="text-center mb-4">
+            <a href="/" class="btn btn-primary">🏠 Back to Home</a>
+        </div>
+
+        <!-- Training History Table -->
+        <div class="card shadow-lg p-4 mt-4">
+            <h5>Training History</h5>
+            <div class="table-responsive">
+                <table class="table table-striped mt-3">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Module</th>
+                            <th>Input</th>
+                            <th>Feedback</th>
+                            <th>Score</th>
+                            <th>Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="progress-table">
+                        <tr><td colspan="5" class="text-center text-muted">Loading progress...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Score Progress Chart -->
+        <div class="card shadow-lg p-4 mt-4">
+            <h5>Score Progress (Trend Analysis)</h5>
+            <canvas id="trendChart"></canvas>
+        </div>
+
+        <!-- Module Performance Breakdown (Bar Chart) -->
+        <div class="card shadow-lg p-4 mt-4">
+            <h5>Performance by Module</h5>
+            <canvas id="moduleChart"></canvas>
+        </div>
+
+        <!-- Score Distribution (Pie Chart) -->
+        <div class="card shadow-lg p-4 mt-4">
+            <h5>Score Distribution</h5>
+            <canvas id="scoreChart"></canvas>
+        </div>
+    </div>
+
+    <footer class="text-center mt-5 py-3 bg-dark text-light">
+        <p>© 2024 Verbal Trainer. All Rights Reserved.</p>
+    </footer>
+
+    <script>
+        async function loadProgress() {
+            try {
+                const response = await fetch('/progress');
+                if (!response.ok) throw new Error("Failed to fetch progress data.");
+
+                const data = await response.json();
+                if (!data || data.length === 0) {
+                    document.getElementById("progress-table").innerHTML = `
+                        <tr><td colspan="5" class="text-center text-muted">No progress records found.</td></tr>
+                    `;
+                    return;
+                }
+
+                let tableHTML = "";
+                let labels = [], scores = [], modules = {};
+                let highScores = 0, midScores = 0, lowScores = 0;
+
+                data.forEach(entry => {
+                    let score = entry.score || 0;
+                    tableHTML += `
+                        <tr>
+                            <td>${entry.module_type}</td>
+                            <td>${entry.user_input || "N/A"}</td>
+                            <td>${entry.ai_feedback || "No feedback"}</td>
+                            <td><strong>${score}</strong></td>
+                            <td>${entry.timestamp}</td>
+                        </tr>
+                    `;
+                    labels.push(entry.timestamp);
+                    scores.push(score);
+
+                    // Categorize scores for Pie Chart
+                    if (score >= 8) highScores++;
+                    else if (score >= 6) midScores++;
+                    else lowScores++;
+
+                    // Track scores per module for Bar Chart
+                    if (!modules[entry.module_type]) {
+                        modules[entry.module_type] = { total: 0, count: 0 };
+                    }
+                    modules[entry.module_type].total += score;
+                    modules[entry.module_type].count += 1;
+                });
+
+                document.getElementById("progress-table").innerHTML = tableHTML;
+
+                // Generate Moving Average for Trend Chart (3-point moving average)
+                let avgScores = scores.map((_, i, arr) => {
+                    let subset = arr.slice(Math.max(0, i - 2), i + 1);
+                    return subset.reduce((a, b) => a + b, 0) / subset.length;
+                });
+
+                // Destroy existing charts before rendering new ones
+                if (window.trendChart) window.trendChart.destroy();
+                if (window.moduleChart) window.moduleChart.destroy();
+                if (window.scoreChart) window.scoreChart.destroy();
+
+                // Render Score Trend Chart
+                window.trendChart = new Chart(document.getElementById("trendChart"), {
+                    type: "line",
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: "Your Scores",
+                                data: scores,
+                                borderColor: "blue",
+                                fill: false,
+                                tension: 0.2
+                            },
+                            {
+                                label: "Moving Avg (3 sessions)",
+                                data: avgScores,
+                                borderColor: "red",
+                                borderDash: [5, 5],
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                // Render Module Performance Bar Chart
+                window.moduleChart = new Chart(document.getElementById("moduleChart"), {
+                    type: "bar",
+                    data: {
+                        labels: Object.keys(modules),
+                        datasets: [{
+                            label: "Average Score",
+                            data: Object.values(modules).map(m => m.total / m.count),
+                            backgroundColor: "green"
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+                // Render Score Distribution Pie Chart
+                window.scoreChart = new Chart(document.getElementById("scoreChart"), {
+                    type: "pie",
+                    data: {
+                        labels: ["High (8+)", "Medium (6-7.9)", "Low (<6)"],
+                        datasets: [{
+                            data: [highScores, midScores, lowScores],
+                            backgroundColor: ["#28a745", "#ffc107", "#dc3545"]
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+
+            } catch (error) {
+                document.getElementById("progress-table").innerHTML = `
+                    <tr><td colspan="5" class="text-center text-danger">Error loading progress: ${error.message}</td></tr>
+                `;
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", loadProgress);
+    </script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Training</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Verbal Trainer</a>
+        </div>
+    </nav>
+
+    <div class="container text-center mt-5">
+        <h1>Voice Training</h1>
+        <p class="lead">Upload or record audio, and AI will analyze your speech.</p>
+
+        <div class="row mt-4">
+            <!-- Upload Section -->
+            <div class="col-md-6">
+                <div class="card shadow-lg p-4">
+                    <h5>Upload an Audio File</h5>
+                    <input type="file" id="audio" class="form-control mb-3" accept="audio/*">
+                    <button class="btn btn-primary w-100" onclick="uploadAudio()">Upload & Analyze</button>
+                    <button class="btn btn-danger w-100 mt-2" onclick="clearUpload()">Clear</button>
+                </div>
+            </div>
+
+            <!-- Record Section -->
+            <div class="col-md-6">
+                <div class="card shadow-lg p-4">
+                    <h5>Record Live Audio</h5>
+                    <button class="btn btn-danger w-100" id="recordButton">🎤 Start Recording</button>
+                    <button class="btn btn-secondary w-100 mt-2" id="stopButton" disabled>⏹ Stop</button>
+                    <audio id="recordedAudio" controls class="mt-3 w-100"></audio>
+                    <button class="btn btn-success w-100 mt-2" id="uploadRecorded" disabled>Upload Recording</button>
+                    <button class="btn btn-danger w-100 mt-2" onclick="clearRecording()">Clear</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="text-center mt-4" style="display: none;">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p>Processing...</p>
+        </div>
+
+        <div id="result" class="mt-4" style="display: none;">
+            <div class="card shadow-lg p-4">
+                <h5>Transcription:</h5>
+                <p id="transcript" class="alert alert-info"></p>
+
+                <h5>AI Response:</h5>
+                <p id="ai_response" class="alert alert-secondary"></p>
+                
+                <h5>AI Speech Output:</h5>
+                <audio id="speech_audio" controls class="mt-2 w-100">
+                    <source id="audio_source" src="" type="audio/mpeg">
+                    Your browser does not support the audio element.
+                </audio>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center mt-5 py-3 bg-dark text-light">
+        <p>© 2024 Verbal Trainer. All Rights Reserved.</p>
+    </footer>
+
+    <script>
+        function clearUpload() {
+            document.getElementById("audio").value = "";
+        }
+
+        function clearRecording() {
+            let recordedAudio = document.getElementById("recordedAudio");
+            recordedAudio.src = "";
+            document.getElementById("uploadRecorded").disabled = true;
+        }
+    </script>
+
+    <script src="{{ url_for('static', filename='scripts.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Training</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Verbal Trainer</a>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="chat-container">
+            <h1 class="text-center">Chat with AI</h1>
+
+            <!-- Scenario Selection -->
+            <label for="scenario" class="form-label">Choose a Scenario:</label>
+            <select id="scenario" class="form-select mb-3" onchange="updateScenario()">
+                <option value="casual">Casual Conversation</option>
+                <option value="interview">Job Interview</option>
+                <option value="debate">Debate</option>
+                <option value="storytelling">Storytelling</option>
+            </select>
+
+            <div id="chat-box" class="chat-box">
+                <p class="text-muted" id="ai_intro">Start chatting to get AI feedback!</p>
+            </div>
+
+            <div class="input-group">
+                <input type="text" id="user_input" class="form-control" placeholder="Type your message..." autocomplete="off">
+                <button class="btn btn-primary btn-custom" onclick="sendMessage()">Send</button>
+                <button class="btn btn-secondary btn-custom ms-2" id="recordButton">🎤</button>
+            </div>
+
+            <div id="loading" class="text-center mt-3" style="display: none;">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p>AI is thinking...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- <footer class="text-center mt-5 py-3 bg-dark text-light">
+        <p>© 2024 Verbal Trainer. All Rights Reserved.</p>
+    </footer> -->
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+
+        function updateScenario() {
+            let scenario = $("#scenario").val();
+            let scenarioMessages = {
+                "casual": "Hi! Let's have a friendly chat. What’s on your mind today?",
+                "interview": "Hello! What job role are you preparing for? Let's do a mock interview!",
+                "debate": "Let's have a debate! Here are some topics: AI in Education, Climate Change, Social Media Influence. Choose one!",
+                "storytelling": "Tell me a short story idea, and I’ll help you develop it!"
+            };
+            $("#chat-box").html(`<div class="chat-message ai-message"><strong>AI:</strong> ${scenarioMessages[scenario]}</div>`);
+        }
+
+        function sendMessage() {
+            let userInput = $("#user_input").val().trim();
+            let scenario = $("#scenario").val();
+            if (!userInput) return;
+
+            $("#chat-box").append(`<div class="chat-message user-message"><strong>You:</strong> ${userInput}</div>`);
+            $("#user_input").val("");
+            $("#loading").show();
+
+            $.post("/chat", { user_input: userInput, scenario: scenario }, function (data) {
+                $("#loading").hide();
+                displayAIResponse(data);
+            });
+        }
+
+        function displayAIResponse(data) {
+            let aiMessage = `<div class="chat-message ai-message"><strong>AI:</strong> ${data.response}</div>`;
+            let audioControls = "";
+            if (data.speech) {
+                audioControls = `
+                    <div class="d-flex align-items-center mt-2">
+                        <button class="btn btn-secondary hear-ai-btn w-75" onclick="toggleAudio(this)" data-audio-url="${data.speech}">
+                            🔊 Hear AI
+                        </button>
+                        <select class="form-select form-select-sm ms-2 voiceSpeed" style="width: 70px;" onchange="updateAudioSpeed(this)">
+                            <option value="1" selected>1x</option>
+                            <option value="1.2">1.2x</option>
+                            <option value="1.5">1.5x</option>
+                        </select>
+                    </div>`;
+            }
+
+            $("#chat-box").append(aiMessage);
+            if (data.speech) $("#chat-box").append(audioControls);
+            $("#chat-box").scrollTop($("#chat-box")[0].scrollHeight);
+        }
+
+        $("#user_input").keypress(function(event) {
+            if (event.which == 13) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+
+        $("#recordButton").click(async function() {
+            if (!mediaRecorder || mediaRecorder.state === "inactive") {
+                try {
+                    let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+                    mediaRecorder.onstop = async () => {
+                        let audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+                        let formData = new FormData();
+                        formData.append("audio", audioBlob, "voice_message.wav");
+
+                        $("#loading").show();
+                        fetch("/assessment_audio", {
+                            method: "POST",
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            $("#loading").hide();
+                            $("#chat-box").append(`<div class="chat-message user-message"><strong>You (Voice):</strong> ${data.transcript}</div>`);
+                            displayAIResponse(data);
+                        });
+                    };
+
+                    mediaRecorder.start();
+                    $("#recordButton").text("⏹ Stop");
+                } catch (error) {
+                    alert("Microphone access denied. Please allow microphone permissions.");
+                }
+            } else {
+                mediaRecorder.stop();
+                $("#recordButton").text("🎤");
+            }
+        });
+
+        function toggleAudio(button) {
+            let audioUrl = button.getAttribute("data-audio-url");
+            if (!audioUrl) return;
+
+            let speedSelector = button.nextElementSibling;
+            let speed = parseFloat(speedSelector.value);
+
+            let audio = new Audio(audioUrl);
+            audio.playbackRate = speed;
+            audio.play();
+
+            button.innerText = "⏹ Stop AI";
+            audio.onended = function() {
+                button.innerText = "🔊 Hear AI";
+            };
+        }
+
+        function updateAudioSpeed(select) {
+            if (audio) audio.playbackRate = parseFloat(select.value);
+        }
+    </script>
+</body>
+</html>

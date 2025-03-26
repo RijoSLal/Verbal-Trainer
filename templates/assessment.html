@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentation Assessment</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Verbal Trainer</a>
+        </div>
+    </nav>
+
+    <div class="container text-center mt-5">
+        <h1>Presentation Assessment</h1>
+        <p class="lead">Submit a speech or text-based presentation for AI feedback.</p>
+
+        <div class="card shadow-lg p-4">
+            <ul class="nav nav-tabs mb-3" id="assessmentTabs">
+                <li class="nav-item">
+                    <a class="nav-link active" id="text-tab" data-bs-toggle="tab" href="#text-assessment">Text-Based</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" id="audio-tab" data-bs-toggle="tab" href="#audio-assessment">Audio-Based</a>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                <!-- Text Assessment Tab -->
+                <div class="tab-pane fade show active" id="text-assessment">
+                    <textarea id="presentation_text" class="form-control mb-3" rows="5" placeholder="Paste your presentation text here..."></textarea>
+                    <button class="btn btn-primary" onclick="submitTextAssessment()">Submit</button>
+                    <button class="btn btn-danger" onclick="clearTextAssessment()">Clear</button>
+                </div>
+
+                <!-- Audio Assessment Tab -->
+                <div class="tab-pane fade" id="audio-assessment">
+                    <input type="file" id="audio" class="form-control mb-3" accept="audio/*">
+                    <button class="btn btn-secondary" onclick="submitAudioAssessment()">Upload & Assess</button>
+                    <button class="btn btn-danger" onclick="clearAudioAssessment()">Clear</button>
+
+                    <hr>
+                    <h5>🎤 Record Your Speech</h5>
+                    <button class="btn btn-danger" id="recordButton" onclick="startRecording()">Start Recording</button>
+                    <button class="btn btn-secondary" id="stopButton" onclick="stopRecording()" disabled>Stop</button>
+                    <audio id="recordedAudio" controls class="mt-2"></audio>
+                    <button class="btn btn-success mt-2" id="uploadRecorded" onclick="uploadRecordedAudio()" disabled>Upload Recording</button>
+                </div>
+            </div>
+
+            <div id="loading" class="text-center mt-3" style="display: none;">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p>Processing...</p>
+            </div>
+
+            <div id="result" class="mt-4" style="display: none;">
+                <h5>AI Feedback</h5>
+                <p id="feedback_text" class="alert alert-info"></p>
+
+                <h5>Assessment Scores</h5>
+                <div class="progress mb-2">
+                    <div id="structure_score" class="progress-bar bg-success" role="progressbar"></div>
+                </div>
+                <div class="progress mb-2">
+                    <div id="delivery_score" class="progress-bar bg-info" role="progressbar"></div>
+                </div>
+                <div class="progress">
+                    <div id="content_score" class="progress-bar bg-warning" role="progressbar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center mt-5 py-3 bg-dark text-light">
+        <p>© 2024 Verbal Trainer. All Rights Reserved.</p>
+    </footer>
+
+    <script>
+        function submitTextAssessment() {
+            let userText = $("#presentation_text").val();
+            if (!userText.trim()) {
+                alert("Please enter your presentation text.");
+                return;
+            }
+
+            $("#loading").show();
+            $("#result").hide();
+
+            $.post("/assessment", { user_text: userText }, function (data) {
+                $("#loading").hide();
+                $("#feedback_text").text(data.feedback || "No feedback received.");
+                updateScores();
+                $("#result").show();
+            });
+        }
+
+        function submitAudioAssessment() {
+            let audioFile = $("#audio")[0].files[0];
+            if (!audioFile) {
+                alert("Please select an audio file.");
+                return;
+            }
+
+            let formData = new FormData();
+            formData.append("audio", audioFile);
+            $("#loading").show();
+            $("#result").hide();
+
+            $.ajax({
+                url: "/assessment_audio",
+                type: "POST",
+                data: formData,
+                contentType: false,
+                processData: false,
+                success: function (data) {
+                    $("#loading").hide();
+                    $("#feedback_text").text(data.feedback || "No feedback received.");
+                    updateScores();
+                    $("#result").show();
+                }
+            });
+        }
+
+        function clearTextAssessment() {
+            $("#presentation_text").val("");
+            $("#result").hide();
+        }
+
+        function clearAudioAssessment() {
+            $("#audio").val("");
+            $("#result").hide();
+        }
+
+        function updateScores() {
+            $("#structure_score").css("width", "85%").text("Structure: 8.5/10");
+            $("#delivery_score").css("width", "78%").text("Delivery: 7.8/10");
+            $("#content_score").css("width", "90%").text("Content: 9.0/10");
+        }
+
+        let mediaRecorder;
+        let audioChunks = [];
+
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    let audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+                    let audioURL = URL.createObjectURL(audioBlob);
+                    document.getElementById("recordedAudio").src = audioURL;
+                    document.getElementById("uploadRecorded").disabled = false;
+                };
+
+                mediaRecorder.start();
+                document.getElementById("recordButton").disabled = true;
+                document.getElementById("stopButton").disabled = false;
+            });
+        }
+
+        function stopRecording() {
+            mediaRecorder.stop();
+            document.getElementById("recordButton").disabled = false;
+            document.getElementById("stopButton").disabled = true;
+        }
+
+        function uploadRecordedAudio() {
+    let audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+    let formData = new FormData();
+    formData.append("audio", audioBlob, "recorded_audio.wav");
+
+    $("#loading").show();
+    $("#result").hide();
+
+    fetch("/assessment_audio", {
+        method: "POST",
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        $("#loading").hide();
+        
+        if (data.feedback) {
+            $("#feedback_text").text(data.feedback);
+        } else {
+            $("#feedback_text").text("AI could not generate feedback. Try again.");
+        }
+
+        $("#result").show();
+        updateScores(); // Ensure scores are updated **after** feedback
+    })
+    .catch(error => {
+        $("#loading").hide();
+        $("#feedback_text").text("Error processing audio. Try again.");
+        $("#result").show();
+    });
+}
+
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>
