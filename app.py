@@ -1,11 +1,10 @@
 import os
 
 from flask import Flask, jsonify, render_template, request
-
 from database.db_setup import get_user_progress, init_db, save_user_response
-from modules.llm_wrapper import customLLMBot
+from modules.llm_wrapper import customLLMBot,customLLMBotEval
 from modules.speech_processing import transcribe_audio  # Import transcription function
-from modules.training_modules import run_training_module
+
 
 app = Flask(__name__)
 init_db()
@@ -21,6 +20,7 @@ def chat():
             user_input = request.form['user_input']
             session_id = request.remote_addr
             scenario = request.form.get('scenario', 'casual')
+            print(user_input,session_id,scenario)
 
             scenario_prompts = {
                 "casual": "Respond like a friendly conversation partner.",
@@ -30,33 +30,21 @@ def chat():
             }
             prompt = scenario_prompts.get(scenario, "Respond normally.")
 
-            response = customLLMBot(f"{prompt} {user_input}", session_id=session_id)
-
+            response = customLLMBot(prompt,user_input)
+       
+            feedback= customLLMBotEval(user_input)
+            
+            feedback_text=feedback.eval
+            score=feedback.score
+          
+            save_user_response(session_id, scenario, user_input, feedback_text, score)
+      
             return jsonify({'response': response})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
     return render_template('chat.html')
 
-@app.route('/train', methods=['POST'])
-def train():
-    try:
-        module_type = request.form.get('module_type')
-        user_input = request.form.get('user_input')
-        session_id = request.remote_addr
-
-        if not module_type or not user_input:
-            return jsonify({'error': 'Missing module type or user input'}), 400
-
-        feedback_data = run_training_module(module_type, user_input, session_id)
-        feedback_text = feedback_data.get("feedback", "No feedback provided.")
-        score = feedback_data.get("score", 0)
-
-        save_user_response(session_id, module_type, user_input, feedback_text, score)
-
-        return jsonify({'feedback': feedback_text, 'score': score})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @app.route('/assessment', methods=['GET', 'POST'])
 def assessment():
